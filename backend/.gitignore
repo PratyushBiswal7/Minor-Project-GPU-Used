@@ -1,3 +1,26 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Node
 node_modules/
+
+# Environment variables
 .env
+
+# Temporary / generated files
+temp/
 *.log
+
+# ML / cache
+.cache/
+huggingface/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,75 +1,90 @@
-const { tryCaptions, downloadAudio } = require("./youtubeService");
-const { spawn } = require("child_process");
+const axios = require("axios");
+const {
+  tryCaptions,
+  downloadAudio,
+  extractVideoId,
+} = require("./youtubeService");
 
+/**
+ * Main entry: Try captions first, else fallback to GPU Whisper service
+ */
 async function transcribeFromYoutube(url) {
-  console.time(`[transcribeFromYoutube] Total`);
+  console.time("[transcribeFromYoutube] Total");
+
+  // 1️⃣ Try YouTube auto-captions first
   const cap = await tryCaptions(url);
 
   if (cap && cap.text) {
     console.log(
-      `[transcribeFromYoutube] Using auto-captions for ${url} (length: ${cap.text.length})`
+      `[transcribeFromYoutube] Using auto-captions (length: ${cap.text.length})`
     );
+
     const sentences = cap.text.split(/(?<=[.!?])\s+/).filter(Boolean);
+
     const segments = sentences.map((t, i) => ({
       text: t,
       start: i * 5,
       end: (i + 1) * 5,
     }));
-    console.timeEnd(`[transcribeFromYoutube] Total`);
-    return { transcript: cap.text, segments };
+
+    console.timeEnd("[transcribeFromYoutube] Total");
+    return {
+      transcript: cap.text,
+      segments,
+    };
   }
 
+  // 2️⃣ Fallback to GPU Whisper
   console.log(
-    `[transcribeFromYoutube] Auto-captions not found, falling back to Whisper.`
+    "[transcribeFromYoutube] Auto-captions not found, falling back to Whisper service."
   );
-  console.time(`[downloadAudio]`);
-  const { audioPath } = await downloadAudio(url);
-  console.timeEnd(`[downloadAudio]`);
-  console.log(`[transcribeFromYoutube] Audio downloaded to ${audioPath}`);
 
-  console.time(`[runLocalWhisper]`);
+  console.time("[downloadAudio]");
+  const { audioPath } = await downloadAudio(url);
+  console.timeEnd("[downloadAudio]");
+  console.log(`[transcribeFromYoutube] Audio downloaded → ${audioPath}`);
+
+  console.time("[runLocalWhisper]");
   const result = await runLocalWhisper(audioPath);
-  console.timeEnd(`[runLocalWhisper]`);
+  console.timeEnd("[runLocalWhisper]");
+
   console.log(
     `[transcribeFromYoutube] Whisper transcription complete (length: ${result.transcript.length})`
   );
 
-  console.timeEnd(`[transcribeFromYoutube] Total`);
+  console.timeEnd("[transcribeFromYoutube] Total");
   return result;
 }
 
-function runLocalWhisper(audioPath) {
-  console.log(`[runLocalWhisper] Starting Whisper for ${audioPath}`);
-  return new Promise((resolve, reject) => {
-    const py = spawn("python", ["scripts/transcribe.py", audioPath], {
-      cwd: process.cwd(),
-    });
-    let out = "",
-      err = "";
-    py.stdout.on("data", (d) => (out += d.toString()));
-    py.stderr.on("data", (d) => (err += d.toString()));
-    py.on("close", (code) => {
-      if (code !== 0) {
-        console.error(`[runLocalWhisper] Error:`, err || "Whisper failed");
-        return reject(new Error(err || "Whisper failed"));
+/**
+ * Calls Python Whisper GPU service via HTTP
+ * (NO spawn, NO CUDA crashes)
+ */
+async function runLocalWhisper(audioPath) {
+  try {
+    const res = await axios.post(
+      "http://127.0.0.1:8001/transcribe",
+      {
+        audio_path: audioPath,
+      },
+      {
+        timeout: 0, // allow long GPU jobs
       }
-      try {
-        const json = JSON.parse(out);
-        console.log(
-          `[runLocalWhisper] JSON received, segments: ${
-            json.segments ? json.segments.length : "N/A"
-          }`
-        );
-        resolve(json);
-      } catch (e) {
-        console.error(`[runLocalWhisper] JSON parse error:`, e);
-        reject(e);
-      }
-    });
-  });
+    );
+
+    return res.data;
+  } catch (err) {
+    console.error("[Whisper Service Error]");
+    if (err.response) {
+      console.error(err.response.data);
+    } else {
+      console.error(err.message);
+    }
+    throw err;
+  }
 }
 
 module.exports = {
   transcribeFromYoutube,
-  extractVideoId: require("./youtubeService").extractVideoId,
+  extractVideoId,
 };

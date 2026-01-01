@@ -1,0 +1,34 @@
+
+PROJECT STARTUP STEPS (TERMINAL)
+
+1. Open PowerShell
+
+2. Go to backend directory
+cd "C:\My Folder\Minor Project\AI-Video-Summarizer-Quiz\backend"
+
+3. Activate Python virtual environment
+.\venv\Scripts\Activate.ps1
+
+4. Start Whisper GPU service (KEEP THIS TERMINAL OPEN)
+python whisper_server.py
+
+5. Open a NEW terminal
+
+6. Go to backend directory again
+cd "C:\My Folder\Minor Project\AI-Video-Summarizer-Quiz\backend"
+
+7. Activate virtual environment again
+.\venv\Scripts\Activate.ps1
+
+8. Start Node backend
+npm start
+
+9. (Optional) Monitor GPU usage
+nvidia-smi -l 1
+
+RUN ORDER SUMMARY:
+- Activate venv
+- Start whisper_server.py
+- Open new terminal
+- Activate venv
+- Run npm start

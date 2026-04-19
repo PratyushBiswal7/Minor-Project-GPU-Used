@@ -7,7 +7,7 @@ const QuizSchema = new mongoose.Schema(
     correctIndex: Number,
     explanation: String,
   },
-  { _id: false }
+  { _id: false },
 );
 
 const SegmentSchema = new mongoose.Schema(
@@ -16,21 +16,55 @@ const SegmentSchema = new mongoose.Schema(
     start: Number,
     end: Number,
   },
-  { _id: false }
+  { _id: false },
 );
 
 const VideoSchema = new mongoose.Schema(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
-    videoUrl: { type: String, required: true },
-    videoId: { type: String, index: true },
-    transcript: String,
-    segments: [SegmentSchema],
-    summary: String,
-    quiz: [QuizSchema],
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      index: true,
+    },
+
+    videoUrl: {
+      type: String,
+      required: true,
+    },
+
+    videoId: {
+      type: String,
+      index: true,
+    },
+
     name: String,
+
+    transcript: String,
+
+    segments: [SegmentSchema],
+
+    summary: String,
+
+    quiz: [QuizSchema],
+
+    summarySize: {
+      type: String,
+      enum: ["short", "medium", "detailed"],
+      default: "medium",
+    },
+
+    difficulty: {
+      type: String,
+      enum: ["easy", "medium", "hard"],
+      default: "medium",
+    },
+
+    quizId: {
+      type: String,
+      index: true,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("Video", VideoSchema);

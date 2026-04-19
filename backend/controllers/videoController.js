@@ -3,124 +3,157 @@ const {
   transcribeFromYoutube,
   extractVideoId,
 } = require("../services/sttService");
+
 const {
   summarizeText,
   generateQuizFromSummary,
 } = require("../services/llmService");
+
 const { safeParseQuiz } = require("../services/parserService");
-const { chunkByLength } = require("../utils/chunker");
 const { getYoutubeTitle } = require("../services/youtubeService");
 
-const MAX_SUMMARY_CHARS = parseInt(process.env.MAX_SUMMARY_CHARS || "4000", 10);
+const { generateSpeech } = require("../services/ttsService");
+const { generatePDF } = require("../services/pdfService");
 
 exports.processVideo = async (req, res) => {
   try {
-    const { videoUrl } = req.body;
+    const {
+      videoUrl,
+      summarySize = "medium",
+      difficulty = "medium",
+    } = req.body;
+
     const userId = req.user?.userId;
+
     if (!videoUrl) return res.status(400).json({ error: "videoUrl required" });
+
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    // Start overall timer
     console.time(`[processVideo] ${videoUrl}`);
 
-    // Check and report cache hit
-    const cached = await Video.findOne({ userId, videoUrl });
+    const videoId = extractVideoId(videoUrl);
+
+    // CACHE CHECK (faster now)
+    const cached = await Video.findOne({ videoId });
+
     if (cached) {
       console.log(`[processVideo] Cache hit for ${videoUrl}`);
       console.timeEnd(`[processVideo] ${videoUrl}`);
-      return res.json(cached);
+
+      return res.json({
+        ...cached.toObject(),
+        shareLink: `http://localhost:3000/quiz/${cached.quizId}`,
+      });
     }
 
-    // Title retrieval
+    // GET TITLE
     console.time(`[getYoutubeTitle]`);
     const name = await getYoutubeTitle(videoUrl);
     console.timeEnd(`[getYoutubeTitle]`);
+
     console.log(`[getYoutubeTitle] Title: ${name}`);
 
-    // Transcription
+    // TRANSCRIPTION
     console.time(`[transcribeFromYoutube]`);
     const { transcript, segments } = await transcribeFromYoutube(videoUrl);
     console.timeEnd(`[transcribeFromYoutube]`);
+
     console.log(
-      `[transcribeFromYoutube] Transcript length: ${transcript.length}`
+      `[transcribeFromYoutube] Transcript length: ${transcript.length}`,
     );
 
-    // Chunking
-    const chunks = chunkByLength(transcript, MAX_SUMMARY_CHARS);
-    console.log(
-      `[chunkByLength] Chunks count: ${chunks.length}, max chars per chunk: ${MAX_SUMMARY_CHARS}`
-    );
+    // LIMIT TRANSCRIPT SIZE (very important for speed)
+    const trimmedTranscript = transcript.slice(0, 12000);
 
-    // Summarizing each chunk
-    const partials = [];
-    for (let i = 0; i < chunks.length; i++) {
-      console.time(`[summarizeText] chunk ${i + 1}`);
-      const summary = await summarizeText(chunks[i]);
-      console.timeEnd(`[summarizeText] chunk ${i + 1}`);
-      console.log(
-        `[summarizeText] Chunk ${i + 1} summary length: ${summary.length}`
-      );
-      partials.push(summary);
-    }
+    // FAST SUMMARIZATION (single AI call)
+    console.time(`[summarizeText]`);
 
-    // Final combine step if more than one chunk
-    let summary = partials.join("\n");
-    if (partials.length > 1) {
-      console.time(`[summarizeText] combine`);
-      summary = await summarizeText(
-        `Combine these partial summaries into one concise summary within 180 words:\n${summary}`
-      );
-      console.timeEnd(`[summarizeText] combine`);
-      console.log(`[summarizeText] Combined summary length: ${summary.length}`);
-    }
+    const summary = await summarizeText(trimmedTranscript, summarySize);
 
-    // Quiz generation
+    console.timeEnd(`[summarizeText]`);
+
+    // GENERATE QUIZ
     console.time(`[generateQuizFromSummary]`);
-    const quizRaw = await generateQuizFromSummary(summary);
-    console.timeEnd(`[generateQuizFromSummary]`);
-    console.log(`[generateQuizFromSummary] Raw quiz length: ${quizRaw.length}`);
 
-    // Quiz parsing
-    console.time(`[safeParseQuiz]`);
+    const quizRaw = await generateQuizFromSummary(summary, difficulty);
+
+    console.timeEnd(`[generateQuizFromSummary]`);
+
     const quiz = safeParseQuiz(quizRaw).slice(0, 5);
-    console.timeEnd(`[safeParseQuiz]`);
+
     console.log(`[safeParseQuiz] Final quiz questions count: ${quiz.length}`);
 
-    // Database save
+    // TEXT TO SPEECH
+    console.time(`[generateSpeech]`);
+
+    const audioPath = await generateSpeech(summary);
+
+    console.timeEnd(`[generateSpeech]`);
+
+    // GENERATE PDF
+    console.time(`[generatePDF]`);
+
+    const pdfPath = await generatePDF(summary, quiz);
+
+    console.timeEnd(`[generatePDF]`);
+
+    // UNIQUE QUIZ ID
+    const quizId = Date.now().toString();
+
+    // SAVE TO DATABASE
     console.time(`[Video.create]`);
+
     const saved = await Video.create({
       userId,
       videoUrl,
-      videoId: extractVideoId(videoUrl),
+      videoId,
       name,
       transcript,
       segments,
       summary,
       quiz,
+      quizId,
+      summarySize,
+      difficulty,
     });
+
     console.timeEnd(`[Video.create]`);
 
-    // End overall timer
+    const shareLink = `http://localhost:5173/quiz/${quizId}`;
+
     console.timeEnd(`[processVideo] ${videoUrl}`);
-    return res.json(saved);
+
+    return res.json({
+      ...saved.toObject(),
+      ttsAudio: audioPath,
+      pdf: pdfPath,
+      shareLink,
+    });
   } catch (e) {
     console.error(e);
-    return res
-      .status(500)
-      .json({ error: "Processing failed", detail: String(e).slice(0, 200) });
+
+    return res.status(500).json({
+      error: "Processing failed",
+      detail: String(e).slice(0, 200),
+    });
   }
 };
 
 exports.history = async (req, res) => {
   try {
     const userId = req.user?.userId;
+
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
     const items = await Video.find({ userId })
       .sort({ createdAt: -1 })
       .limit(50);
+
     return res.json(items);
   } catch (e) {
-    return res.status(500).json({ error: "Failed to load history" });
+    return res.status(500).json({
+      error: "Failed to load history",
+    });
   }
 };
 
@@ -128,9 +161,14 @@ exports.deleteVideo = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user?.userId;
+
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    const video = await Video.findOneAndDelete({ _id: id, userId });
+    const video = await Video.findOneAndDelete({
+      _id: id,
+      userId,
+    });
+
     if (!video) return res.status(404).json({ error: "Not found" });
 
     return res.json({ message: "Deleted" });

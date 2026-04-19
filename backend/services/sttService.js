@@ -9,14 +9,15 @@ const {
  * Main entry: Try captions first, else fallback to GPU Whisper service
  */
 async function transcribeFromYoutube(url) {
-  console.time("[transcribeFromYoutube] Total");
+  const totalLabel = `[transcribeFromYoutube-${Date.now()}]`;
+  console.time(totalLabel);
 
   // 1️⃣ Try YouTube auto-captions first
   const cap = await tryCaptions(url);
 
   if (cap && cap.text) {
     console.log(
-      `[transcribeFromYoutube] Using auto-captions (length: ${cap.text.length})`
+      `[transcribeFromYoutube] Using auto-captions (length: ${cap.text.length})`,
     );
 
     const sentences = cap.text.split(/(?<=[.!?])\s+/).filter(Boolean);
@@ -27,7 +28,7 @@ async function transcribeFromYoutube(url) {
       end: (i + 1) * 5,
     }));
 
-    console.timeEnd("[transcribeFromYoutube] Total");
+    console.timeEnd(totalLabel);
     return {
       transcript: cap.text,
       segments,
@@ -36,29 +37,31 @@ async function transcribeFromYoutube(url) {
 
   // 2️⃣ Fallback to GPU Whisper
   console.log(
-    "[transcribeFromYoutube] Auto-captions not found, falling back to Whisper service."
+    "[transcribeFromYoutube] Auto-captions not found, falling back to Whisper service.",
   );
 
-  console.time("[downloadAudio]");
+  const downloadLabel = `[downloadAudio-${Date.now()}]`;
+  console.time(downloadLabel);
   const { audioPath } = await downloadAudio(url);
-  console.timeEnd("[downloadAudio]");
+  console.timeEnd(downloadLabel);
+
   console.log(`[transcribeFromYoutube] Audio downloaded → ${audioPath}`);
 
-  console.time("[runLocalWhisper]");
+  const whisperLabel = `[runLocalWhisper-${Date.now()}]`;
+  console.time(whisperLabel);
   const result = await runLocalWhisper(audioPath);
-  console.timeEnd("[runLocalWhisper]");
+  console.timeEnd(whisperLabel);
 
   console.log(
-    `[transcribeFromYoutube] Whisper transcription complete (length: ${result.transcript.length})`
+    `[transcribeFromYoutube] Whisper transcription complete (length: ${result.transcript.length})`,
   );
 
-  console.timeEnd("[transcribeFromYoutube] Total");
+  console.timeEnd(totalLabel);
   return result;
 }
 
 /**
  * Calls Python Whisper GPU service via HTTP
- * (NO spawn, NO CUDA crashes)
  */
 async function runLocalWhisper(audioPath) {
   try {
@@ -68,8 +71,8 @@ async function runLocalWhisper(audioPath) {
         audio_path: audioPath,
       },
       {
-        timeout: 0, // allow long GPU jobs
-      }
+        timeout: 0,
+      },
     );
 
     return res.data;

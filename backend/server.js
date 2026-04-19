@@ -6,6 +6,7 @@ require("dotenv").config();
 const authRoutes = require("./routes/authRoutes");
 const videoRoutes = require("./routes/videoRoutes");
 const quizRoutes = require("./routes/quizRoutes");
+const chatRoutes = require("./routes/chatRoutes");
 
 const app = express();
 app.use(cors());
@@ -20,6 +21,7 @@ mongoose
 app.use("/api/auth", authRoutes);
 app.use("/api/video", videoRoutes);
 app.use("/api/quiz", quizRoutes);
+app.use("/api/chat", chatRoutes);
 
 const port = process.env.PORT || 5000;
 app.listen(port, () => console.log(`Server running on port ${port}`));

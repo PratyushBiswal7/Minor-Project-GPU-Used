@@ -3,15 +3,20 @@ const path = require("path");
 const fs = require("fs");
 
 function runYtDlp(args) {
-  console.log(`[runYtDlp] Command: yt-dlp ${args.join(' ')}`);
-  console.time(`[runYtDlp] ${args[0]}`);
+  const label = `[runYtDlp-${args[0]}-${Date.now()}]`;
+
+  console.log(`[runYtDlp] Command: yt-dlp ${args.join(" ")}`);
+  console.time(label);
+
   return new Promise((resolve, reject) => {
     execFile("yt-dlp", args, (err, stdout, stderr) => {
-      console.timeEnd(`[runYtDlp] ${args[0]}`);
+      console.timeEnd(label);
+
       if (err) {
         console.error(`[runYtDlp] Error:`, stderr || err);
         return reject(stderr || err);
       }
+
       console.log(`[runYtDlp] Success - Output length: ${stdout.length}`);
       resolve(stdout);
     });
@@ -29,10 +34,13 @@ async function tryCaptions(url) {
   const id = extractVideoId(url);
   const outDir = path.join(process.cwd(), "temp");
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
+
   const base = path.join(outDir, id);
   const vttPath = `${base}.en.vtt`;
 
-  console.time(`[tryCaptions] ${id}`);
+  const label = `[tryCaptions-${id}-${Date.now()}]`;
+  console.time(label);
+
   try {
     await runYtDlp([
       "--write-auto-subs",
@@ -43,19 +51,25 @@ async function tryCaptions(url) {
       base,
       url,
     ]);
+
     if (fs.existsSync(vttPath)) {
-      console.timeEnd(`[tryCaptions] ${id}`);
       const vtt = fs.readFileSync(vttPath, "utf8");
+
       const text = vtt
         .replace(/^WEBVTT.*$/gim, "")
         .replace(
           /\d{2,}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2,}:\d{2}:\d{2}\.\d{3}/g,
-          ""
+          "",
         )
         .replace(/^\d+$/gm, "")
         .replace(/\s+/g, " ")
         .trim();
-      console.log(`[tryCaptions] Auto-captions found for ${id}, length: ${text.length}`);
+
+      console.log(
+        `[tryCaptions] Auto-captions found for ${id}, length: ${text.length}`,
+      );
+
+      console.timeEnd(label);
       return { text };
     } else {
       console.log(`[tryCaptions] No auto-captions found for ${id}.`);
@@ -63,7 +77,8 @@ async function tryCaptions(url) {
   } catch (e) {
     console.error(`[tryCaptions] Error for ${id}`, e);
   }
-  console.timeEnd(`[tryCaptions] ${id}`);
+
+  console.timeEnd(label);
   return null;
 }
 
@@ -71,22 +86,33 @@ async function downloadAudio(url) {
   const id = extractVideoId(url);
   const outDir = path.join(process.cwd(), "temp");
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);
+
   const audioPath = path.join(outDir, `${id}.m4a`);
-  console.time(`[downloadAudio] ${id}`);
+
+  const label = `[downloadAudio-${id}-${Date.now()}]`;
+  console.time(label);
+
   await runYtDlp(["-x", "--audio-format", "m4a", "-o", audioPath, url]);
-  console.timeEnd(`[downloadAudio] ${id}`);
+
+  console.timeEnd(label);
   console.log(`[downloadAudio] Audio saved to: ${audioPath}`);
+
   return { audioPath };
 }
 
 async function getYoutubeTitle(url) {
+  const label = `[getYoutubeTitle-${Date.now()}]`;
+
   try {
-    console.time(`[getYoutubeTitle]`);
+    console.time(label);
+
     const title = await runYtDlp(["--get-title", url]);
-    console.timeEnd(`[getYoutubeTitle]`);
-    console.log(`[getYoutubeTitle] Title: ${title.trim()}`);
+
+    console.timeEnd(label);
+
     return title.trim();
   } catch (e) {
+    console.timeEnd(label); // important to avoid missing label warning
     console.error(`[getYoutubeTitle] Error`, e);
     return "";
   }

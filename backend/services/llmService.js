@@ -10,21 +10,16 @@ if (!API_KEY) {
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-/*
-========================================
-SUMMARY GENERATION
-Supports summary size:
-short | medium | detailed
-========================================
-*/
-
 async function summarizeText(text, size = "medium") {
-  console.time(`[summarizeText]`);
+  const label = `[summarizeText-${Date.now()}]`;
+  console.time(label);
+
   console.log(
     `[summarizeText] Calling Gemini with input length: ${text.length}`,
   );
 
   const model = genAI.getGenerativeModel({ model: MODEL });
+  console.log("Using Gemini Model:", MODEL);
 
   let instruction;
 
@@ -55,11 +50,10 @@ Summary:
 `;
 
   const res = await model.generateContent(prompt);
-
   const output = res.response.text();
 
   console.log(`[summarizeText] Output length: ${output.length}`);
-  console.timeEnd(`[summarizeText]`);
+  console.timeEnd(label);
 
   return output;
 }
@@ -67,12 +61,12 @@ Summary:
 /*
 ========================================
 QUIZ GENERATION
-Creates 5 MCQ questions
 ========================================
 */
 
 async function generateQuizFromSummary(summary) {
-  console.time(`[generateQuizFromSummary]`);
+  const label = `[generateQuiz-${Date.now()}]`;
+  console.time(label);
 
   console.log(
     `[generateQuizFromSummary] Calling Gemini with summary length: ${summary.length}`,
@@ -107,11 +101,10 @@ JSON:
 `;
 
   const res = await model.generateContent(prompt);
-
   const output = res.response.text();
 
   console.log(`[generateQuizFromSummary] Output length: ${output.length}`);
-  console.timeEnd(`[generateQuizFromSummary]`);
+  console.timeEnd(label);
 
   return output;
 }

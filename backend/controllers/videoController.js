@@ -119,7 +119,7 @@ exports.processVideo = async (req, res) => {
 
     console.timeEnd(`[Video.create]`);
 
-    const shareLink = `http://localhost:5173/quiz/${quizId}`;
+    const shareLink = `http://localhost:3000/quiz/${quizId}`;
 
     console.timeEnd(`[processVideo] ${videoUrl}`);
 

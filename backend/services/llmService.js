@@ -58,11 +58,7 @@ Summary:
   return output;
 }
 
-/*
-========================================
-QUIZ GENERATION
-========================================
-*/
+// QUIZ GENERATION
 
 async function generateQuizFromSummary(summary) {
   const label = `[generateQuiz-${Date.now()}]`;

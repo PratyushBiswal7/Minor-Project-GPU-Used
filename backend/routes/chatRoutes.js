@@ -1,10 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
-const MODEL = "gemini-2.5-flash";
-
-// ✅ FIXED HERE
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 router.post("/", async (req, res) => {
